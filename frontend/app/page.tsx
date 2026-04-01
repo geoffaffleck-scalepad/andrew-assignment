@@ -2,39 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-
-interface Listing {
-  id: number;
-  title: string;
-  description: string | null;
-  price: number;
-  image_url: string | null;
-  size: number;
-  materials: string[];
-  colors: string[];
-  style: string | null;
-  seller_id: string;
-  created_at: string;
-}
-
-const API = "http://localhost:8000";
-
-const cardStyle: React.CSSProperties = {
-  border: "1px solid #ddd",
-  borderRadius: "8px",
-  padding: "1rem",
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.5rem",
-};
-
-const imgStyle: React.CSSProperties = {
-  width: "100%",
-  height: "180px",
-  objectFit: "cover",
-  borderRadius: "4px",
-  background: "#f0f0f0",
-};
+import { Listing } from "@/types/listing";
+import { getListings } from "@/lib/api";
 
 export default function Home() {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -44,11 +13,9 @@ export default function Home() {
   const [checkoutDone, setCheckoutDone] = useState(false);
 
   useEffect(() => {
-    const params = search ? `?search=${encodeURIComponent(search)}` : "";
     setLoading(true);
-    fetch(`${API}/listings${params}`)
-      .then((res) => res.json())
-      .then((data) => setListings(data))
+    getListings(search || undefined)
+      .then(setListings)
       .catch(() => setListings([]))
       .finally(() => setLoading(false));
   }, [search]);
@@ -71,79 +38,66 @@ export default function Home() {
   const total = cart.reduce((sum, item) => sum + item.price, 0).toFixed(2);
 
   return (
-    <main style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto" }}>
-      <h1 style={{ marginBottom: "1rem" }}>Shoe Marketplace</h1>
+    <main className="max-w-6xl mx-auto p-8">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Shoe Marketplace</h1>
+        <Link
+          href="/sell"
+          className="px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-700"
+        >
+          Seller Portal
+        </Link>
+      </div>
 
       <input
         type="text"
         placeholder="Search shoes..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        style={{
-          width: "100%",
-          padding: "0.75rem",
-          marginBottom: "1.5rem",
-          border: "1px solid #ccc",
-          borderRadius: "4px",
-          fontSize: "1rem",
-        }}
+        className="w-full p-3 mb-6 border border-gray-300 rounded text-base"
       />
 
-      <div style={{ display: "flex", gap: "2rem" }}>
+      <div className="flex gap-8">
         {/* Listings grid */}
-        <section style={{ flex: 3 }}>
-          {loading && <p>Loading...</p>}
+        <section className="flex-[3]">
+          {loading && <p className="text-gray-500">Loading...</p>}
           {!loading && listings.length === 0 && (
-            <p style={{ color: "#888" }}>No listings found.</p>
+            <p className="text-gray-400">No listings found.</p>
           )}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-              gap: "1rem",
-            }}
-          >
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-4">
             {listings.map((listing) => (
-              <div key={listing.id} style={cardStyle}>
+              <div
+                key={listing.id}
+                className="border border-gray-200 rounded-lg p-4 flex flex-col gap-2"
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={listing.image_url || "https://placehold.co/300x200?text=No+Image"}
+                  src={
+                    listing.image_url ||
+                    "https://placehold.co/300x200?text=No+Image"
+                  }
                   alt={listing.title}
-                  style={imgStyle}
+                  className="w-full h-[180px] object-cover rounded bg-gray-100"
                 />
-                <h3>{listing.title}</h3>
-                <p style={{ fontWeight: "bold", fontSize: "1.1rem" }}>
+                <h3 className="font-semibold">{listing.title}</h3>
+                <p className="font-bold text-lg">
                   ${listing.price.toFixed(2)}
                 </p>
                 {listing.style && (
-                  <p style={{ color: "#666", fontSize: "0.9rem" }}>
+                  <p className="text-gray-500 text-sm">
                     Style: {listing.style}
                   </p>
                 )}
-                <div style={{ display: "flex", gap: "0.5rem", marginTop: "auto" }}>
+                <div className="flex gap-2 mt-auto">
                   <button
                     onClick={() => addToCart(listing)}
-                    style={{
-                      flex: 1,
-                      padding: "0.5rem",
-                      background: "#111",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                    }}
+                    className="flex-1 py-2 bg-gray-900 text-white rounded cursor-pointer hover:bg-gray-700"
                   >
                     Add to Cart
                   </button>
                   <Link
                     href={`/listings/${listing.id}`}
-                    style={{
-                      flex: 1,
-                      padding: "0.5rem",
-                      textAlign: "center",
-                      border: "1px solid #111",
-                      borderRadius: "4px",
-                    }}
+                    className="flex-1 py-2 text-center border border-gray-900 rounded hover:bg-gray-50"
                   >
                     View Details
                   </Link>
@@ -154,46 +108,27 @@ export default function Home() {
         </section>
 
         {/* Cart sidebar */}
-        <aside
-          style={{
-            flex: 1,
-            borderLeft: "1px solid #ddd",
-            paddingLeft: "1.5rem",
-            minWidth: "250px",
-          }}
-        >
-          <h2 style={{ marginBottom: "1rem" }}>Cart ({cart.length})</h2>
+        <aside className="flex-1 border-l border-gray-200 pl-6 min-w-[250px]">
+          <h2 className="text-xl font-bold mb-4">Cart ({cart.length})</h2>
 
           {cart.length === 0 && !checkoutDone && (
-            <p style={{ color: "#888" }}>Your cart is empty.</p>
+            <p className="text-gray-400">Your cart is empty.</p>
           )}
 
           {cart.map((item, i) => (
             <div
               key={i}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "0.5rem 0",
-                borderBottom: "1px solid #eee",
-              }}
+              className="flex justify-between items-center py-2 border-b border-gray-100"
             >
               <div>
-                <p style={{ fontSize: "0.9rem" }}>{item.title}</p>
-                <p style={{ fontSize: "0.85rem", color: "#666" }}>
+                <p className="text-sm">{item.title}</p>
+                <p className="text-sm text-gray-500">
                   ${item.price.toFixed(2)}
                 </p>
               </div>
               <button
                 onClick={() => removeFromCart(i)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#c00",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
+                className="text-red-600 text-sm cursor-pointer hover:underline"
               >
                 Remove
               </button>
@@ -201,22 +136,11 @@ export default function Home() {
           ))}
 
           {cart.length > 0 && (
-            <div style={{ marginTop: "1rem" }}>
-              <p style={{ fontWeight: "bold", marginBottom: "0.5rem" }}>
-                Total: ${total}
-              </p>
+            <div className="mt-4">
+              <p className="font-bold mb-2">Total: ${total}</p>
               <button
                 onClick={handleCheckout}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  background: "#111",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "1rem",
-                }}
+                className="w-full py-3 bg-gray-900 text-white rounded cursor-pointer text-base hover:bg-gray-700"
               >
                 Checkout
               </button>
@@ -224,13 +148,7 @@ export default function Home() {
           )}
 
           {checkoutDone && (
-            <p
-              style={{
-                marginTop: "1rem",
-                color: "green",
-                fontWeight: "bold",
-              }}
-            >
+            <p className="mt-4 text-green-600 font-bold">
               Order placed successfully!
             </p>
           )}
