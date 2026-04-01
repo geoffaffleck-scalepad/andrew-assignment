@@ -1,22 +1,21 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { Listing } from "@/types/listing";
 import { getListing } from "@/lib/api";
 
-export default function ListingDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
+export default function ListingDetailPage() {
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [added, setAdded] = useState(false);
 
   useEffect(() => {
+    if (!id) return;
     getListing(id)
       .then(setListing)
       .catch(() => setError("Listing not found."))

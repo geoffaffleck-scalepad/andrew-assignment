@@ -17,3 +17,25 @@ export interface User {
   email: string;
   role: string;
 }
+
+export interface OrderItem {
+  listing_id: number;
+  title: string;
+  price: number;
+  seller_id: string;
+}
+
+export interface Order {
+  id: number;
+  buyer_id: string;
+  items: OrderItem[];
+  total_amount: number;
+  payment_last4: string;
+  shipping_name: string;
+  address_line1: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  created_at: string;
+}

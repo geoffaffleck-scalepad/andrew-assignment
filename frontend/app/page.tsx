@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Listing, User } from "@/types/listing";
-import { getListings, login } from "@/lib/api";
+import { Listing, Order, User } from "@/types/listing";
+import { createOrder, getBuyerOrders, getListings, login } from "@/lib/api";
 
 export default function Home() {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -15,6 +15,11 @@ export default function Home() {
   const [buyerEmail, setBuyerEmail] = useState("");
   const [buyerPassword, setBuyerPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [isBuyerModalOpen, setIsBuyerModalOpen] = useState(false);
+  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
   const [checkoutForm, setCheckoutForm] = useState({
     cardName: "",
@@ -58,6 +63,7 @@ export default function Home() {
         return;
       }
       setBuyer(user);
+      setIsBuyerModalOpen(false);
     } catch {
       setLoginError("Login failed. Please check your credentials.");
     }
@@ -68,13 +74,39 @@ export default function Home() {
     setBuyerEmail("");
     setBuyerPassword("");
     setLoginError("");
+    setIsBuyerModalOpen(false);
+    setIsOrdersModalOpen(false);
+    setOrders([]);
+    setOrdersError("");
   };
 
   const handleCheckoutFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCheckoutForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleCheckout = (e: React.FormEvent) => {
+  const loadOrders = async (buyerId: string) => {
+    setOrdersLoading(true);
+    setOrdersError("");
+    try {
+      const data = await getBuyerOrders(buyerId);
+      setOrders(data);
+    } catch {
+      setOrdersError("Failed to load orders.");
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const openMyOrders = async () => {
+    if (!buyer) {
+      setCheckoutError("Please sign in as a buyer to view orders.");
+      return;
+    }
+    setIsOrdersModalOpen(true);
+    await loadOrders(buyer.id);
+  };
+
+  const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     setCheckoutError("");
     if (!buyer) {
@@ -90,21 +122,48 @@ export default function Home() {
       return;
     }
 
-    setCart([]);
-    setCheckoutForm({
-      cardName: "",
-      cardNumber: "",
-      expiry: "",
-      cvv: "",
-      shippingName: "",
-      addressLine1: "",
-      city: "",
-      state: "",
-      zip: "",
-      country: "",
-    });
-    setCheckoutDone(true);
-    setTimeout(() => setCheckoutDone(false), 3000);
+    try {
+      await createOrder({
+        buyer_id: buyer.id,
+        items: cart.map((item) => ({
+          listing_id: item.id,
+          title: item.title,
+          price: item.price,
+          seller_id: item.seller_id,
+        })),
+        card_number: checkoutForm.cardNumber,
+        shipping_name: checkoutForm.shippingName,
+        address_line1: checkoutForm.addressLine1,
+        city: checkoutForm.city,
+        state: checkoutForm.state,
+        zip: checkoutForm.zip,
+        country: checkoutForm.country,
+      });
+      setCart([]);
+      setCheckoutForm({
+        cardName: "",
+        cardNumber: "",
+        expiry: "",
+        cvv: "",
+        shippingName: "",
+        addressLine1: "",
+        city: "",
+        state: "",
+        zip: "",
+        country: "",
+      });
+      setCheckoutDone(true);
+      if (isOrdersModalOpen) {
+        await loadOrders(buyer.id);
+      }
+      setTimeout(() => setCheckoutDone(false), 3000);
+    } catch (error) {
+      setCheckoutError(
+        error instanceof Error
+          ? error.message
+          : "Checkout failed. Please verify your details."
+      );
+    }
   };
 
   const total = cart.reduce((sum, item) => sum + item.price, 0).toFixed(2);
@@ -113,61 +172,162 @@ export default function Home() {
     <main className="max-w-6xl mx-auto p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Shoe Marketplace</h1>
-        <Link
-          href="/sell"
-          className="px-4 py-2 bg-blue-700 text-white rounded-md font-medium border border-blue-800 shadow-sm hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-colors"
-        >
-          Seller Portal
-        </Link>
-      </div>
-      <section className="mb-6 border border-gray-200 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold">Buyer Login</h2>
-          {buyer && (
-            <button
-              type="button"
-              onClick={handleBuyerLogout}
-              className="text-sm text-gray-600 hover:underline cursor-pointer"
-            >
-              Log out
-            </button>
+        <div className="flex items-center gap-2">
+          {buyer ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsBuyerModalOpen(true)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Buyer: {buyer.id}
+              </button>
+              <button
+                type="button"
+                onClick={openMyOrders}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                My Orders
+              </button>
+              <button
+                type="button"
+                onClick={handleBuyerLogout}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Buyer Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={openMyOrders}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                My Orders
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginError("");
+                  setIsBuyerModalOpen(true);
+                }}
+                className="px-4 py-2 bg-gray-900 text-white rounded-md font-medium hover:bg-gray-700 transition-colors cursor-pointer"
+              >
+                Buyer Login
+              </button>
+            </>
           )}
+          <Link
+            href="/sell"
+            className="px-4 py-2 bg-blue-700 text-white rounded-md font-medium border border-blue-800 shadow-sm hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-colors"
+          >
+            Seller Portal
+          </Link>
         </div>
-        {!buyer ? (
-          <form onSubmit={handleBuyerLogin} className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <input
-              type="email"
-              value={buyerEmail}
-              onChange={(e) => setBuyerEmail(e.target.value)}
-              placeholder="buyer email"
-              className="p-2 border border-gray-300 rounded text-sm"
-              required
-            />
-            <input
-              type="password"
-              value={buyerPassword}
-              onChange={(e) => setBuyerPassword(e.target.value)}
-              placeholder="password"
-              className="p-2 border border-gray-300 rounded text-sm"
-              required
-            />
-            <button
-              type="submit"
-              className="py-2 px-4 bg-gray-900 text-white rounded text-sm hover:bg-gray-700 cursor-pointer"
-            >
-              Sign In as Buyer
-            </button>
-            {loginError && (
-              <p className="md:col-span-3 text-sm text-red-600">{loginError}</p>
+      </div>
+
+      {isBuyerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Buyer Login</h2>
+              <button
+                type="button"
+                onClick={() => setIsBuyerModalOpen(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+            {buyer ? (
+              <p className="text-sm text-gray-700">
+                Signed in as <span className="font-semibold">{buyer.email}</span>{" "}
+                (id: <span className="font-mono">{buyer.id}</span>)
+              </p>
+            ) : (
+              <form onSubmit={handleBuyerLogin} className="flex flex-col gap-3">
+                <input
+                  type="email"
+                  value={buyerEmail}
+                  onChange={(e) => setBuyerEmail(e.target.value)}
+                  placeholder="buyer email"
+                  className="p-2 border border-gray-300 rounded text-sm"
+                  required
+                />
+                <input
+                  type="password"
+                  value={buyerPassword}
+                  onChange={(e) => setBuyerPassword(e.target.value)}
+                  placeholder="password"
+                  className="p-2 border border-gray-300 rounded text-sm"
+                  required
+                />
+                {loginError && <p className="text-sm text-red-600">{loginError}</p>}
+                <button
+                  type="submit"
+                  className="py-2 px-4 bg-gray-900 text-white rounded text-sm hover:bg-gray-700 cursor-pointer"
+                >
+                  Sign In as Buyer
+                </button>
+              </form>
             )}
-          </form>
-        ) : (
-          <p className="text-sm text-gray-700">
-            Signed in as <span className="font-semibold">{buyer.email}</span> (id:{" "}
-            <span className="font-mono">{buyer.id}</span>)
-          </p>
-        )}
-      </section>
+          </div>
+        </div>
+      )}
+      {isOrdersModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl max-h-[80vh] overflow-auto">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">My Orders</h2>
+              <button
+                type="button"
+                onClick={() => setIsOrdersModalOpen(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+            {ordersLoading && <p className="text-sm text-gray-500">Loading orders...</p>}
+            {!ordersLoading && ordersError && (
+              <p className="text-sm text-red-600">{ordersError}</p>
+            )}
+            {!ordersLoading && !ordersError && orders.length === 0 && (
+              <p className="text-sm text-gray-500">No orders yet.</p>
+            )}
+            {!ordersLoading && !ordersError && orders.length > 0 && (
+              <div className="space-y-3">
+                {orders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="border border-gray-200 rounded-md p-3"
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-sm font-semibold">Order #{order.id}</p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(order.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <p className="text-sm mb-1">
+                      Total: <span className="font-semibold">${order.total_amount.toFixed(2)}</span>
+                    </p>
+                    <p className="text-xs text-gray-600 mb-2">
+                      Paid with ending in {order.payment_last4}
+                    </p>
+                    <div className="text-sm">
+                      {order.items.map((item, index) => (
+                        <p key={`${order.id}-${item.listing_id}-${index}`}>
+                          {item.title} - ${item.price.toFixed(2)}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <input
         type="text"

@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Listing, User } from "@/types/listing";
-import { login, getSellerListings, createListing } from "@/lib/api";
+import {
+  login,
+  getSellerListings,
+  createListing,
+  updateListing,
+  deleteListing,
+} from "@/lib/api";
 
 const emptyForm = {
   title: "",
@@ -26,6 +32,9 @@ export default function SellPage() {
   const [myListings, setMyListings] = useState<Listing[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [editingListingId, setEditingListingId] = useState<number | null>(null);
+  const formSectionRef = useRef<HTMLElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
 
   // Restore user from localStorage on mount
   useEffect(() => {
@@ -52,6 +61,10 @@ export default function SellPage() {
     setLoginError("");
     try {
       const u = await login(email, password);
+      if (u.role !== "seller") {
+        setLoginError("Seller portal requires a seller account.");
+        return;
+      }
       setUser(u);
       localStorage.setItem("seller_user", JSON.stringify(u));
     } catch {
@@ -76,37 +89,92 @@ export default function SellPage() {
     if (!user) return;
     setSubmitting(true);
     setSuccessMsg("");
+    const payload = {
+      seller_id: user.id,
+      title: form.title,
+      description: form.description || null,
+      price: parseFloat(form.price),
+      image_url: form.image_url || null,
+      size: parseFloat(form.size),
+      materials: form.materials
+        ? form.materials.split(",").map((s) => s.trim())
+        : [],
+      colors: form.colors
+        ? form.colors.split(",").map((s) => s.trim())
+        : [],
+      style: form.style || null,
+    };
     try {
-      await createListing({
-        seller_id: user.id,
-        title: form.title,
-        description: form.description || null,
-        price: parseFloat(form.price),
-        image_url: form.image_url || null,
-        size: parseFloat(form.size),
-        materials: form.materials
-          ? form.materials.split(",").map((s) => s.trim())
-          : [],
-        colors: form.colors
-          ? form.colors.split(",").map((s) => s.trim())
-          : [],
-        style: form.style || null,
-      });
+      if (editingListingId) {
+        await updateListing(editingListingId, payload);
+        setSuccessMsg("Listing updated!");
+      } else {
+        await createListing(payload);
+        setSuccessMsg("Listing created!");
+      }
       setForm(emptyForm);
-      setSuccessMsg("Listing created!");
+      setEditingListingId(null);
       setTimeout(() => setSuccessMsg(""), 3000);
       // Refresh my listings
       const updated = await getSellerListings(user.id);
       setMyListings(updated);
     } catch {
-      setSuccessMsg("Failed to create listing.");
+      setSuccessMsg(editingListingId ? "Failed to update listing." : "Failed to create listing.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleEdit = (listing: Listing) => {
+    setEditingListingId(listing.id);
+    setForm({
+      title: listing.title,
+      description: listing.description || "",
+      price: listing.price.toString(),
+      image_url: listing.image_url || "",
+      size: listing.size.toString(),
+      materials: listing.materials.join(", "),
+      colors: listing.colors.join(", "),
+      style: listing.style || "",
+    });
+    setSuccessMsg("");
+    setTimeout(() => {
+      formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      titleInputRef.current?.focus();
+    }, 0);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingListingId(null);
+    setForm(emptyForm);
+    setSuccessMsg("");
+  };
+
+  const handleDelete = async (listingId: number) => {
+    if (!user) return;
+    if (!window.confirm("Delete this listing?")) return;
+    setSuccessMsg("");
+    try {
+      await deleteListing(listingId, user.id);
+      const updated = await getSellerListings(user.id);
+      setMyListings(updated);
+      if (editingListingId === listingId) {
+        handleCancelEdit();
+      }
+      setSuccessMsg("Listing deleted.");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch {
+      setSuccessMsg("Failed to delete listing.");
+    }
+  };
+
   const inputClass =
     "w-full p-2 border border-gray-300 rounded text-sm";
+  const inventoryCount = myListings.length;
+  const totalInventoryValue = myListings.reduce(
+    (sum, listing) => sum + listing.price,
+    0
+  );
 
   // Login form
   if (!user) {
@@ -142,7 +210,7 @@ export default function SellPage() {
           </button>
         </form>
         <p className="mt-4 text-xs text-gray-400">
-          Try: user1@example.com / pass1
+          Try: seller1@example.com / pass1
         </p>
       </main>
     );
@@ -166,15 +234,28 @@ export default function SellPage() {
           Log Out
         </button>
       </div>
+      <section className="mb-6 grid grid-cols-2 gap-3">
+        <div className="rounded border border-gray-200 bg-gray-50 p-3">
+          <p className="text-xs text-gray-500">Active Listings</p>
+          <p className="text-xl font-bold">{inventoryCount}</p>
+        </div>
+        <div className="rounded border border-gray-200 bg-gray-50 p-3">
+          <p className="text-xs text-gray-500">Total Inventory Value</p>
+          <p className="text-xl font-bold">${totalInventoryValue.toFixed(2)}</p>
+        </div>
+      </section>
 
       {/* Create listing form */}
-      <section className="mb-8">
-        <h2 className="text-lg font-bold mb-4">Create New Listing</h2>
+      <section ref={formSectionRef} className="mb-8">
+        <h2 className="text-lg font-bold mb-4">
+          {editingListingId ? "Edit Listing" : "Create New Listing"}
+        </h2>
         <form
           onSubmit={handleSubmit}
           className="grid grid-cols-2 gap-3"
         >
           <input
+            ref={titleInputRef}
             name="title"
             placeholder="Title *"
             value={form.title}
@@ -244,8 +325,23 @@ export default function SellPage() {
               disabled={submitting}
               className="px-6 py-2 bg-gray-900 text-white rounded cursor-pointer hover:bg-gray-700 disabled:opacity-50"
             >
-              {submitting ? "Creating..." : "Create Listing"}
+              {submitting
+                ? editingListingId
+                  ? "Updating..."
+                  : "Creating..."
+                : editingListingId
+                  ? "Update Listing"
+                  : "Create Listing"}
             </button>
+            {editingListingId && (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="px-6 py-2 border border-gray-300 rounded cursor-pointer hover:bg-gray-50"
+              >
+                Cancel Edit
+              </button>
+            )}
             {successMsg && (
               <span className="text-green-600 text-sm font-medium">
                 {successMsg}
@@ -267,7 +363,11 @@ export default function SellPage() {
           {myListings.map((listing) => (
             <div
               key={listing.id}
-              className="border border-gray-200 rounded-lg p-3 flex flex-col gap-1"
+              className={`border rounded-lg p-3 flex flex-col gap-1 ${
+                editingListingId === listing.id
+                  ? "border-blue-400 bg-blue-50/40"
+                  : "border-gray-200"
+              }`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -283,6 +383,26 @@ export default function SellPage() {
               {listing.style && (
                 <p className="text-gray-500 text-xs">Style: {listing.style}</p>
               )}
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleEdit(listing)}
+                  className={`flex-1 py-1.5 border rounded text-sm cursor-pointer ${
+                    editingListingId === listing.id
+                      ? "border-blue-500 text-blue-700 bg-blue-50"
+                      : "border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {editingListingId === listing.id ? "Editing..." : "Edit"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(listing.id)}
+                  className="flex-1 py-1.5 border border-red-200 text-red-600 rounded text-sm cursor-pointer hover:bg-red-50"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
