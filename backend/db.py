@@ -1,8 +1,13 @@
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "marketplace.db"
+
 engine = create_engine(
-    "sqlite:///./marketplace.db",
+    f"sqlite:///{DB_PATH}",
     connect_args={"check_same_thread": False},
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

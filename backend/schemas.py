@@ -3,6 +3,19 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    role: str
+
+
 class ShoeListingCreate(BaseModel):
     title: str
     description: str | None = None

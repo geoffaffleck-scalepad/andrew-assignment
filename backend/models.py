@@ -5,6 +5,15 @@ from sqlalchemy import Column, DateTime, Float, Integer, String, func
 from db import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password = Column(String, nullable=False)  # plain text (assignment scope)
+    role = Column(String, nullable=False, default="seller")
+
+
 class ShoeListing(Base):
     __tablename__ = "shoe_listings"
 

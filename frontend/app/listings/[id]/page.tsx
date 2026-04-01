@@ -70,22 +70,38 @@ export default function ListingDetailPage({
           className="w-[400px] h-[300px] object-cover rounded-lg bg-gray-100"
         />
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 text-gray-900">
           <h1 className="text-2xl font-bold">{listing.title}</h1>
           <p className="text-2xl font-bold">${listing.price.toFixed(2)}</p>
 
           {listing.description && (
-            <p className="text-gray-600">{listing.description}</p>
+            <p className="text-base leading-relaxed text-gray-800">
+              {listing.description}
+            </p>
           )}
 
-          <div className="text-sm text-gray-500 flex flex-col gap-1">
-            <p>Size: {listing.size}</p>
-            {listing.style && <p>Style: {listing.style}</p>}
+          <div className="text-base text-gray-800 flex flex-col gap-1">
+            <p>
+              <span className="font-semibold text-gray-900">Size:</span>{" "}
+              {listing.size}
+            </p>
+            {listing.style && (
+              <p>
+                <span className="font-semibold text-gray-900">Style:</span>{" "}
+                {listing.style}
+              </p>
+            )}
             {listing.materials.length > 0 && (
-              <p>Materials: {listing.materials.join(", ")}</p>
+              <p>
+                <span className="font-semibold text-gray-900">Materials:</span>{" "}
+                {listing.materials.join(", ")}
+              </p>
             )}
             {listing.colors.length > 0 && (
-              <p>Colors: {listing.colors.join(", ")}</p>
+              <p>
+                <span className="font-semibold text-gray-900">Colors:</span>{" "}
+                {listing.colors.join(", ")}
+              </p>
             )}
           </div>
 
